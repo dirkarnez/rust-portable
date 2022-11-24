@@ -1,0 +1,70 @@
+name: portable-release-actions-workflow
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+      - 'c*' # Push events to matching v*, i.e. v1.0, v20.15.10
+      
+jobs:
+  build:
+    name: Create Release
+    runs-on: windows-2019
+    env:
+      targetZip: rust-portable-${{ github.ref_name }}.zip
+    steps:
+      - uses: actions/checkout@v3
+        
+      - name: installer
+        shell: cmd
+        run: |
+          curl https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-gnu/rustup-init.exe -L -J --output rustup-init.exe
+          
+      - name: set up
+        shell: cmd
+        run: |
+          cd /d "${{github.workspace}}" &&^
+          mkdir "rust-portable" &&^
+          cd "rust-portable" &&^
+          mkdir "USERPROFILE_PORTABLE" &&^
+          cd "USERPROFILE_PORTABLE" &&^
+          set USERPROFILE=${{github.workspace}}\rust-portable\USERPROFILE_PORTABLE\
+          cd /d "${{github.workspace}}\rust-portable\USERPROFILE_PORTABLE\" &&^
+          dir &&^
+          cd /d "${{github.workspace}}" &&^
+          "${{github.workspace}}\rustup-init.exe" --version &&^
+          "${{github.workspace}}\rustup-init.exe" --no-modify-path --default-host=x86_64-pc-windows-gnu --default-toolchain=stable -y
+
+      - name: verfiy
+        shell: cmd
+        run: |
+          cd /d "${{github.workspace}}" &&^
+          set USERPROFILE=${{github.workspace}}\rust-portable\USERPROFILE_PORTABLE\
+          set PATH=%USERPROFILE%\.cargo\bin\
+          set CARGO_HOME=%USERPROFILE%\.cargo\
+          set RUST_PATH=%CARGO_HOME%\bin\
+          set RUSTUP_HOME=%USERPROFILE%\.rustup\
+          cd /d "${{github.workspace}}\rust-portable\USERPROFILE_PORTABLE\.cargo\bin\" &&^
+          dir &&^
+          .\rustc.exe --version &&^
+          .\cargo.exe --version
+          
+      - name: post
+        shell: cmd
+        run: |
+          cd /d "${{github.workspace}}" &&^
+          xcopy /H /Y /C .\test-installation.cmd "rust-portable"
+          
+      - name: Archive Release
+        uses: thedoctor0/zip-release@master
+        with:
+          type: 'zip'
+          directory: "rust-portable"
+          filename: "${{ env.targetZip }}"
+          
+      - name: Release prebuilt
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "rust-portable/${{ env.targetZip }}"
+          allowUpdates: true
+          token: ${{ secrets.GITHUB_TOKEN }}
